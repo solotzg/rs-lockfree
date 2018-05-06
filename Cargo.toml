@@ -1,0 +1,12 @@
+[package]
+name = "rs_lockfree"
+version = "0.1.0"
+authors = ["童智高 <solotzg@163.com>"]
+
+[dependencies]
+log = "0.4"
+time = "0.1"
+
+[dev-dependencies]
+env_logger = "0.5.9"
+core_affinity = "0.5.9"

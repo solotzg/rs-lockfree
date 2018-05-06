@@ -1,2 +1,3 @@
 # rs-lockfree
-lockfree
+lockfree queue
+lockfree stack

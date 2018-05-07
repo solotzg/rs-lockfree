@@ -23,6 +23,7 @@ impl Default for SeqVersion {
     }
 }
 
+#[repr(C)]
 #[derive(Copy, Clone)]
 struct TidSeq {
     tid: u16,
@@ -244,7 +245,7 @@ impl ThreadStore {
     pub fn release(&mut self, handle: &VersionHandle) {
         assert_eq!(self.tid, unsafe { util::get_thread_id() } as u16);
         if self.tid == handle.tid() && self.curr_seq() != handle.seq() {
-            println!("invalid handle seq={}, tid={}", handle.seq(), handle.tid());
+            warn!("invalid handle seq={}, tid={}", handle.seq(), handle.tid());
         } else {
             self.set_curr_version(std::u64::MAX);
             self.inc_curr_seq();
@@ -275,7 +276,7 @@ impl ThreadStore {
     }
 
     unsafe fn atomic_load_hazard_waiting_list(&self) -> *mut BaseHazardNode {
-        util::atomic_load_raw_ptr(&(*self.hazard_waiting_list as *const _))
+        util::atomic_load_raw_ptr(&*self.hazard_waiting_list)
     }
 
     pub unsafe fn retire(&mut self, version: u64, node_receiver: &mut ThreadStore) -> i64 {
@@ -289,12 +290,11 @@ impl ThreadStore {
         self.last_retire_version = version;
         let mut curr = self.atomic_load_hazard_waiting_list();
         let mut old = curr;
-        loop {
+        while !{
             let (tmp, ok) = self.atomic_cxchg_hazard_waiting_list(old, ptr::null_mut());
             curr = tmp;
-            if ok {
-                break;
-            }
+            ok
+        } {
             old = curr;
         }
         let mut list_retire = ptr::null_mut();
@@ -353,7 +353,7 @@ impl ThreadStore {
         old: *mut BaseHazardNode,
         src: *mut BaseHazardNode,
     ) -> (*mut BaseHazardNode, bool) {
-        util::atomic_cxchg_raw_ptr(&mut (*self.hazard_waiting_list), old, src)
+        util::atomic_cxchg_raw_ptr(&mut *self.hazard_waiting_list, old, src)
     }
 
     unsafe fn inner_add_nodes(
@@ -364,15 +364,15 @@ impl ThreadStore {
     ) {
         assert_eq!(self.tid, util::get_thread_id() as u16);
         if 0 < count {
-            let curr = self.atomic_load_hazard_waiting_list();
+            let mut curr = self.atomic_load_hazard_waiting_list();
             let mut old = curr;
             (*tail).set_next(curr);
-            loop {
+            while !{
                 let (tmp, ok) = self.atomic_cxchg_hazard_waiting_list(old, head);
-                if ok {
-                    break;
-                }
-                old = tmp;
+                curr = tmp;
+                ok
+            } {
+                old = curr;
                 (*tail).set_next(old);
             }
             sync_fetch_and_add(&mut *self.hazard_waiting_count, count);

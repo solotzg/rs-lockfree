@@ -61,7 +61,7 @@ pub unsafe fn sync_fetch_and_add<T>(dst: *mut T, src: T) -> T {
     intrinsics::atomic_xadd::<T>(dst, src)
 }
 
-pub unsafe fn atomic_load_raw_ptr<T>(ptr: *const *const T) -> *mut T {
+pub unsafe fn atomic_load_raw_ptr<T>(ptr: *const *mut T) -> *mut T {
     intrinsics::atomic_load(ptr as *const usize) as *mut T
 }
 

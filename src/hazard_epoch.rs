@@ -207,7 +207,7 @@ impl HazardEpoch {
 
     #[inline]
     unsafe fn atomic_load_thread_list(&self) -> *mut ThreadStore {
-        util::atomic_load_raw_ptr(&(self.thread_list as *const _))
+        util::atomic_load_raw_ptr(&self.thread_list)
     }
 
     unsafe fn get_min_version(&mut self, force_flush: bool) -> u64 {

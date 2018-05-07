@@ -100,7 +100,7 @@ unsafe fn read_thread_func(mut global_conf: ShardPtr<GlobalConf>) {
         let mut handle = 0u64;
         let ret = global_conf.h.acquire(&mut handle);
         assert_eq!(ret, Status::Success);
-        let v = util::atomic_load_raw_ptr(&(global_conf.v as *const _));
+        let v = util::atomic_load_raw_ptr(&global_conf.v);
         assert!(*v == checker);
         global_conf.h.release(handle);
     }
@@ -111,14 +111,14 @@ unsafe fn write_thread_func(mut global_conf: ShardPtr<GlobalConf>) {
     let global_conf = global_conf.as_mut();
     for _ in 0..global_conf.write_loops {
         let v = Box::into_raw(Box::new(TestObj::new(&mut global_conf.cnt)));
-        let curr = util::atomic_load_raw_ptr(&(global_conf.v as *const _));
+        let mut curr = util::atomic_load_raw_ptr(&global_conf.v);
         let mut old = curr;
-        loop {
+        while !{
             let (tmp, b) = util::atomic_cxchg_raw_ptr(&mut global_conf.v, old, v);
-            if b {
-                break;
-            }
-            old = tmp;
+            curr = tmp;
+            b
+        } {
+            old = curr;
         }
         global_conf.h.add_node(old);
     }
@@ -185,7 +185,9 @@ fn test_multi_thread() {
     let read_count = (cpu_count + 1) / 2;
     let write_count = (cpu_count + 1) / 2;
 
-    let memory = 1024i64 * 1024 * 1024; // 1G
+    println!("read thread {}, write thread {}", read_count, write_count);
+
+    let memory = 1024_i64 * 1024 * 1024; // 1G
     let cnt = memory / mem::size_of::<TestObj>() as i64 / write_count;
 
     let mut global_conf = unsafe { mem::zeroed::<GlobalConf>() };
@@ -196,6 +198,11 @@ fn test_multi_thread() {
     global_conf.v = Box::into_raw(Box::new(TestObj::new(&mut global_conf.cnt)));
     global_conf.h = HazardEpoch::default();
     let global_conf_ptr = ShardPtr::new(&mut global_conf as *mut _);
+
+    println!(
+        "read loops {}, write loops {}",
+        global_conf.read_loops, global_conf.write_loops
+    );
 
     let mut rpd = vec![];
     let mut wpd = vec![];
@@ -215,13 +222,13 @@ fn test_multi_thread() {
         t.join().unwrap();
     }
 
-    println!("rpd joined");
+    println!("read threads joined");
 
     for t in wpd {
         t.join().unwrap();
     }
 
-    println!("wpd joined");
+    println!("write threads joined");
 
     unsafe {
         global_conf.set_stop(true);
@@ -233,11 +240,9 @@ fn test_multi_thread() {
         ptr::drop_in_place(global_conf.v);
     }
 
-    println!("counter={}", global_conf.cnt);
     unsafe {
         global_conf.h.retire();
     }
-    println!("counter={}", global_conf.cnt);
     assert_eq!(0, global_conf.cnt);
 }
 

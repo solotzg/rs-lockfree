@@ -49,7 +49,7 @@ impl<T> FIFONode<T> {
     }
 }
 
-struct LockFreeQueue<T> {
+pub struct LockFreeQueue<T> {
     hazard_epoch: HazardEpoch,
     head: util::WrappedAlign64Type<FIFONodePtr<T>>,
     tail: util::WrappedAlign64Type<FIFONodePtr<T>>,
@@ -64,7 +64,7 @@ impl<T> LockFreeQueue<T> {
         util::atomic_load_raw_ptr(&*self.tail)
     }
 
-    fn new() -> LockFreeQueue<T> {
+    pub fn new() -> LockFreeQueue<T> {
         let head = Box::into_raw(Box::new(FIFONode::<T>::default()));
         LockFreeQueue {
             hazard_epoch: HazardEpoch::default(),

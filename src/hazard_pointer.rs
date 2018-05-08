@@ -44,10 +44,12 @@ pub struct VersionHandle {
 }
 
 impl VersionHandle {
-    pub unsafe fn ver_u64(&self) -> u64 {
-        self.data.ver_u64
+    #[inline]
+    pub fn ver_u64(&self) -> u64 {
+        unsafe { self.data.ver_u64 }
     }
 
+    #[inline]
     pub fn new(uv: u64) -> VersionHandle {
         VersionHandle {
             data: VersionHandleUnion { ver_u64: uv },
@@ -178,23 +180,28 @@ impl ThreadStore {
         }
     }
 
+    #[inline]
     pub fn set_enabled(&mut self, tid: u16) {
         self.enabled = true;
         self.tid = tid;
     }
 
+    #[inline]
     pub fn is_enabled(&self) -> bool {
         self.enabled
     }
 
+    #[inline]
     fn tid(&self) -> u16 {
         self.tid
     }
 
+    #[inline]
     pub fn set_next(&mut self, next: *mut ThreadStore) {
         self.next = WrappedAlign64Type(next);
     }
 
+    #[inline]
     pub fn next(&self) -> *mut ThreadStore {
         *self.next
     }
@@ -225,7 +232,7 @@ impl ThreadStore {
     }
 
     pub fn acquire(&mut self, version: u64, handle: &mut VersionHandle) -> error::Status {
-        assert_eq!(self.tid, unsafe { util::get_thread_id() } as u16);
+        assert_eq!(self.tid(), unsafe { util::get_thread_id() } as u16);
         let mut ret = error::Status::Success;
         if std::u64::MAX != self.curr_version() {
             warn!(
@@ -235,7 +242,7 @@ impl ThreadStore {
             ret = error::Status::Busy;
         } else {
             self.set_curr_version(version);
-            handle.set_tid(self.tid);
+            handle.set_tid(self.tid());
             handle.set_high_bits(0);
             handle.set_seq(self.curr_seq());
         }
@@ -243,8 +250,8 @@ impl ThreadStore {
     }
 
     pub fn release(&mut self, handle: &VersionHandle) {
-        assert_eq!(self.tid, unsafe { util::get_thread_id() } as u16);
-        if self.tid == handle.tid() && self.curr_seq() != handle.seq() {
+        assert_eq!(self.tid(), unsafe { util::get_thread_id() } as u16);
+        if self.tid() == handle.tid() && self.curr_seq() != handle.seq() {
             warn!("invalid handle seq={}, tid={}", handle.seq(), handle.tid());
         } else {
             self.set_curr_version(std::u64::MAX);
@@ -256,7 +263,7 @@ impl ThreadStore {
     where
         T: HazardNodeI,
     {
-        assert_eq!(self.tid, util::get_thread_id() as u16);
+        assert_eq!(self.tid(), util::get_thread_id() as u16);
         let ret = error::Status::Success;
         let base = (*node).get_base_hazard_node();
 
@@ -271,10 +278,12 @@ impl ThreadStore {
         ret
     }
 
+    #[inline]
     pub fn get_hazard_waiting_count(&self) -> i64 {
         unsafe { intrinsics::atomic_load(&*self.hazard_waiting_count as *const _) }
     }
 
+    #[inline]
     unsafe fn atomic_load_hazard_waiting_list(&self) -> *mut BaseHazardNode {
         util::atomic_load_raw_ptr(&*self.hazard_waiting_list)
     }
@@ -282,7 +291,7 @@ impl ThreadStore {
     pub unsafe fn retire(&mut self, version: u64, node_receiver: &mut ThreadStore) -> i64 {
         assert!(
             self as *const _ != node_receiver as *const _
-                || self.tid == util::get_thread_id() as u16
+                || self.tid() == util::get_thread_id() as u16
         );
         if self.last_retire_version == version {
             return 0;
@@ -344,6 +353,7 @@ impl ThreadStore {
         );
     }
 
+    #[inline]
     pub fn version(&self) -> u64 {
         self.curr_version()
     }
@@ -362,7 +372,7 @@ impl ThreadStore {
         tail: *mut BaseHazardNode,
         count: i64,
     ) {
-        assert_eq!(self.tid, util::get_thread_id() as u16);
+        assert_eq!(self.tid(), util::get_thread_id() as u16);
         if 0 < count {
             let mut curr = self.atomic_load_hazard_waiting_list();
             let mut old = curr;

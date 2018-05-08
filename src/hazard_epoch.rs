@@ -30,10 +30,12 @@ pub struct HazardEpoch {
 }
 
 impl HazardEpoch {
+    #[inline]
     unsafe fn curr_min_version(&self) -> u64 {
         intrinsics::atomic_load(&self.curr_min_version_info.curr_min_version)
     }
 
+    #[inline]
     unsafe fn set_curr_min_version(&mut self, curr_min_version: u64) {
         intrinsics::atomic_store(
             &mut self.curr_min_version_info.curr_min_version,
@@ -41,10 +43,12 @@ impl HazardEpoch {
         );
     }
 
+    #[inline]
     unsafe fn curr_min_version_timestamp(&self) -> i64 {
         intrinsics::atomic_load(&self.curr_min_version_info.curr_min_version_timestamp)
     }
 
+    #[inline]
     unsafe fn set_curr_min_version_timestamp(&mut self, curr_min_version_timestamp: i64) {
         intrinsics::atomic_store(
             &mut self.curr_min_version_info.curr_min_version_timestamp,
@@ -73,6 +77,7 @@ impl HazardEpoch {
         ret
     }
 
+    #[inline]
     unsafe fn destroy(&mut self) {
         self.retire();
     }
@@ -121,30 +126,28 @@ impl HazardEpoch {
         ret
     }
 
-    unsafe fn version(&self) -> u64 {
-        intrinsics::atomic_load(&*self.version)
+    #[inline]
+    fn atomic_load_version(&self) -> u64 {
+        unsafe { intrinsics::atomic_load(&*self.version) }
     }
 
-    unsafe fn add_version(&mut self, add: u64) -> u64 {
-        sync_fetch_and_add(&mut *self.version, add)
-    }
-
-    pub unsafe fn acquire(&mut self, handle: &mut u64) -> error::Status {
+    pub fn acquire(&mut self, handle: &mut u64) -> error::Status {
         let mut ts = ptr::null_mut::<ThreadStore>();
-        let mut ret = self.get_thread_store(&mut ts);
+        let mut ret = unsafe { self.get_thread_store(&mut ts) };
         if ret != error::Status::Success {
             warn!("get_thread_store fail, ret={}", ret);
             return ret;
         }
+        let ts = unsafe { &mut (*ts) };
         loop {
-            let version = intrinsics::atomic_load(&*self.version);
+            let version = self.atomic_load_version();
             let mut version_handle = VersionHandle::new(0);
-            ret = (*ts).acquire(version, &mut version_handle);
+            ret = ts.acquire(version, &mut version_handle);
             if ret != error::Status::Success {
                 warn!("thread store acquire fail, ret={}", ret);
                 break;
-            } else if version != intrinsics::atomic_load(&*self.version) {
-                (*ts).release(&version_handle);
+            } else if version != self.atomic_load_version() {
+                ts.release(&version_handle);
             } else {
                 *handle = version_handle.ver_u64();
                 break;
@@ -153,6 +156,7 @@ impl HazardEpoch {
         ret
     }
 
+    #[inline]
     unsafe fn atomic_load_thread_count(&self) -> i64 {
         intrinsics::atomic_load(&self.thread_count)
     }
@@ -176,6 +180,7 @@ impl HazardEpoch {
         }
     }
 
+    #[inline]
     pub unsafe fn get_hazard_waiting_count(&self) -> i64 {
         intrinsics::atomic_load(&*self.hazard_waiting_count)
     }
@@ -217,7 +222,7 @@ impl HazardEpoch {
                 > util::get_cur_microseconds_time()
         {
         } else {
-            ret = self.version();
+            ret = self.atomic_load_version();
             let mut iter = self.atomic_load_thread_list();
             while !iter.is_null() {
                 let ts_min_version = (*iter).version();

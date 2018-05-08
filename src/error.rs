@@ -5,6 +5,7 @@ pub enum Status {
     Success,
     Busy,
     TooManyThreads,
+    InvalidParam,
 }
 
 impl fmt::Display for Status {

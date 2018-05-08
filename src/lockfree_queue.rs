@@ -141,7 +141,6 @@ impl<T> Drop for LockFreeQueue<T> {
 }
 
 mod test {
-    use lockfree_queue::LockFreeQueue;
     use std::cell::RefCell;
 
     struct Node<'a, T> {
@@ -157,6 +156,7 @@ mod test {
 
     #[test]
     fn test_base() {
+        use lockfree_queue::LockFreeQueue;
         let mut queue = LockFreeQueue::new();
         assert!(queue.pop().is_none());
         queue.push(1);
@@ -172,6 +172,7 @@ mod test {
 
     #[test]
     fn test_memory_leak() {
+        use lockfree_queue::LockFreeQueue;
         let cnt = RefCell::new(0);
         let mut queue = LockFreeQueue::new();
         let test_num = 100;

@@ -1,4 +1,3 @@
-#![feature(integer_atomics)]
 #![feature(core_intrinsics)]
 #![feature(raw)]
 #![allow(dead_code)]

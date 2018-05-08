@@ -133,7 +133,6 @@ impl<T> Drop for LockFreeStack<T> {
 
 mod test {
     use std::cell::RefCell;
-    use lockfree_stack::LockFreeStack;
 
     struct Node<'a, T> {
         cnt: &'a RefCell<i32>,
@@ -148,6 +147,7 @@ mod test {
 
     #[test]
     fn test_base() {
+        use lockfree_stack::LockFreeStack;
         let mut queue = LockFreeStack::new();
         assert!(queue.pop().is_none());
         queue.push(1);
@@ -163,6 +163,7 @@ mod test {
 
     #[test]
     fn test_memory_leak() {
+        use lockfree_stack::LockFreeStack;
         let cnt = RefCell::new(0);
         let mut queue = LockFreeStack::new();
         let test_num = 100;

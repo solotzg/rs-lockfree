@@ -10,6 +10,7 @@ pub mod error;
 pub mod hazard_epoch;
 mod spin_lock;
 pub mod lockfree_queue;
+pub mod lockfree_stack;
 
 #[macro_use]
 extern crate log;

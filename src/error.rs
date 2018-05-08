@@ -2,17 +2,9 @@ use std::fmt;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum Status {
-    Error,
     Success,
-    InvalidParam,
-    AllocateFail,
-    InitRepetitive,
-    OpenFileFail,
-    UnexpectedError,
     Busy,
     TooManyThreads,
-    QueueFull,
-    QueueEmpty,
 }
 
 impl fmt::Display for Status {

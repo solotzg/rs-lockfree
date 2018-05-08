@@ -1,5 +1,4 @@
 #![feature(core_intrinsics)]
-#![feature(allocator_api)]
 
 extern crate core_affinity;
 extern crate env_logger;

@@ -2,6 +2,9 @@
 
 extern crate core_affinity;
 extern crate rs_lockfree;
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 
 use rs_lockfree::lockfree_stack;
 use rs_lockfree::util;
@@ -72,7 +75,7 @@ fn get_current_tid() -> i64 {
 fn set_cpu_affinity() {
     let cpus = core_affinity::get_core_ids().unwrap();
     core_affinity::set_for_current(cpus[get_current_tid() as usize % cpus.len()]);
-    println!(
+    info!(
         "set_cpu_affinity {} {}",
         get_current_tid(),
         get_current_tid() as usize % cpus.len()
@@ -130,7 +133,7 @@ unsafe fn producer_thread(mut global_conf: ShardPtr<GlobalConf>) {
 unsafe fn debug_thread(mut global_conf: ShardPtr<GlobalConf>) {
     let global_conf = global_conf.as_mut();
     while intrinsics::atomic_load(&global_conf.producer_cnt) != 0 {
-        println!(
+        info!(
             "debug_thread produced {} consumed {}",
             intrinsics::atomic_load(&global_conf.produced),
             intrinsics::atomic_load(&global_conf.consumed)
@@ -140,12 +143,14 @@ unsafe fn debug_thread(mut global_conf: ShardPtr<GlobalConf>) {
 }
 
 fn test_multi_threads() {
+    env_logger::init();
+
     let cpu_count = core_affinity::get_core_ids().unwrap().len() as i64;
 
     let producer_count = (cpu_count + 1) / 2;
     let consumer_count = cpu_count - producer_count;
 
-    println!(
+    info!(
         "producer_count {} consumer_count {}",
         producer_count, consumer_count
     );
@@ -153,7 +158,7 @@ fn test_multi_threads() {
     let memory = 2048_i64 * 1024 * 1024; // 2G
     let cnt = memory / mem::size_of::<StackValue>() as i64 / producer_count;
 
-    println!("loop_cnt {}, total need {}", cnt, cnt * producer_count);
+    info!("loop_cnt {}, total need {}", cnt, cnt * producer_count);
 
     let mut global_conf = unsafe { mem::zeroed::<GlobalConf>() };
 
@@ -186,13 +191,13 @@ fn test_multi_threads() {
         t.join().unwrap();
     }
 
-    println!("producer_threads joined");
+    info!("producer_threads joined");
 
     for t in consumer_threads {
         t.join().unwrap();
     }
 
-    println!("consumer_threads joined");
+    info!("consumer_threads joined");
 
     watch_thread.join().unwrap();
 
@@ -202,7 +207,7 @@ fn test_multi_threads() {
             intrinsics::atomic_load(&global_conf.consumed),
         )
     };
-    println!("debug_thread produced {} consumed {}", produced, consumed);
+    info!("debug_thread produced {} consumed {}", produced, consumed);
 
     assert_eq!(produced, consumed);
 }

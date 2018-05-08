@@ -3,6 +3,8 @@
 extern crate core_affinity;
 extern crate env_logger;
 extern crate rs_lockfree;
+#[macro_use]
+extern crate log;
 
 use std::mem;
 use std::thread;
@@ -84,7 +86,7 @@ fn get_current_tid() -> i64 {
 fn set_cpu_affinity() {
     let cpus = core_affinity::get_core_ids().unwrap();
     core_affinity::set_for_current(cpus[get_current_tid() as usize % cpus.len()]);
-    println!(
+    info!(
         "set_cpu_affinity {} {}",
         get_current_tid(),
         get_current_tid() as usize % cpus.len()
@@ -125,7 +127,7 @@ unsafe fn write_thread_func(mut global_conf: ShardPtr<GlobalConf>) {
 
 unsafe fn debug_thread_func(global_conf: ShardPtr<GlobalConf>) {
     while !global_conf.as_ref().stop() {
-        println!(
+        info!(
             "hazard_waiting_count={}",
             global_conf.as_ref().h.get_hazard_waiting_count()
         );
@@ -187,7 +189,7 @@ fn run() {
     let read_count = (cpu_count + 1) / 2;
     let write_count = (cpu_count + 1) / 2;
 
-    println!("read thread {}, write thread {}", read_count, write_count);
+    info!("read thread {}, write thread {}", read_count, write_count);
 
     let memory = 2048_i64 * 1024 * 1024; // 2G
     let cnt = memory / mem::size_of::<TestObj>() as i64 / write_count;
@@ -201,7 +203,7 @@ fn run() {
     global_conf.h = HazardEpoch::default();
     let global_conf_ptr = ShardPtr::new(&mut global_conf as *mut _);
 
-    println!(
+    info!(
         "read loops {}, write loops {}",
         global_conf.read_loops, global_conf.write_loops
     );
@@ -224,13 +226,13 @@ fn run() {
         t.join().unwrap();
     }
 
-    println!("read threads joined");
+    info!("read threads joined");
 
     for t in wpd {
         t.join().unwrap();
     }
 
-    println!("write threads joined");
+    info!("write threads joined");
 
     unsafe {
         global_conf.set_stop(true);

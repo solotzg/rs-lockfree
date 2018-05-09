@@ -1,7 +1,7 @@
 use util;
 use std::intrinsics;
-use std::ptr;
 
+/// User mode SpinLock
 pub struct SpinLock {
     atomic: i8,
 }
@@ -13,6 +13,7 @@ impl Default for SpinLock {
 }
 
 impl SpinLock {
+    /// Keep trying to lock until success.
     pub unsafe fn lock(&mut self) {
         while !(0 == intrinsics::atomic_load(&self.atomic)
             && intrinsics::atomic_cxchg(&mut self.atomic, 0, 1).1)
@@ -21,6 +22,13 @@ impl SpinLock {
         }
     }
 
+    /// Keep trying to lock until success, then return SpinLockGuard.
+    pub unsafe fn lock_guard(&mut self) -> SpinLockGuard {
+        self.lock();
+        SpinLockGuard::new(self)
+    }
+
+    /// Unlock if is locked, else panic.
     pub unsafe fn unlock(&mut self) {
         assert!(
             1 == intrinsics::atomic_load(&self.atomic)
@@ -28,38 +36,33 @@ impl SpinLock {
         );
     }
 
+    pub fn is_locked(&self) -> bool {
+        unsafe { 0 == intrinsics::atomic_load(&self.atomic) }
+    }
+
+    /// Return true if lock successfully.
     pub unsafe fn try_lock(&mut self) -> bool {
         (0 == intrinsics::atomic_load(&self.atomic)
             && intrinsics::atomic_cxchg(&mut self.atomic, 0, 1).1)
     }
 }
 
-pub struct SpinLockGuard {
-    spin_lock: *mut SpinLock,
+/// Guard of SpinLock, unlock it when dropped.
+pub struct SpinLockGuard<'a> {
+    spin_lock: &'a mut SpinLock,
 }
 
-impl Default for SpinLockGuard {
-    fn default() -> Self {
-        SpinLockGuard {
-            spin_lock: ptr::null_mut(),
-        }
-    }
-}
-
-impl SpinLockGuard {
+impl<'a> SpinLockGuard<'a> {
     unsafe fn destroy(&mut self) {
-        if !self.spin_lock.is_null() {
-            (*self.spin_lock).unlock();
-            self.spin_lock = ptr::null_mut();
-        }
+        self.spin_lock.unlock();
     }
 
-    pub fn set_spin_lock(&mut self, spin_lock: *mut SpinLock) {
-        self.spin_lock = spin_lock;
+    fn new(spin_lock: &'a mut SpinLock) -> Self {
+        SpinLockGuard { spin_lock }
     }
 }
 
-impl Drop for SpinLockGuard {
+impl<'a> Drop for SpinLockGuard<'a> {
     fn drop(&mut self) {
         unsafe {
             self.destroy();

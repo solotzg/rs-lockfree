@@ -88,7 +88,7 @@ impl VersionHandle {
     }
 }
 
-pub trait HazardNodeI: Drop {
+pub trait HazardNodeT: Drop {
     fn get_base_hazard_node(&self) -> *mut BaseHazardNode;
 }
 
@@ -108,7 +108,7 @@ impl Default for BaseHazardNode {
     }
 }
 
-impl HazardNodeI for BaseHazardNode {
+impl HazardNodeT for BaseHazardNode {
     fn get_base_hazard_node(&self) -> *mut BaseHazardNode {
         self as *const _ as *mut BaseHazardNode
     }
@@ -256,14 +256,14 @@ impl ThreadStore {
 
     pub unsafe fn add_node<T>(&mut self, version: u64, node: *mut T) -> error::Status
     where
-        T: HazardNodeI,
+        T: HazardNodeT,
     {
         assert_eq!(self.tid(), util::get_thread_id() as u16);
         let ret = error::Status::Success;
         let base = (*node).get_base_hazard_node();
 
         (*base).set_tait_obj(mem::transmute::<_, raw::TraitObject>(
-            &mut *node as &mut HazardNodeI,
+            &mut *node as &mut HazardNodeT,
         ));
 
         (*base).set_version(version);
@@ -340,7 +340,7 @@ impl ThreadStore {
 
     unsafe fn retire_hazard_node(node_retire: *mut BaseHazardNode) {
         let trait_obj = (*node_retire).trait_obj();
-        let obj = mem::transmute::<raw::TraitObject, &mut HazardNodeI>(trait_obj);
+        let obj = mem::transmute::<raw::TraitObject, &mut HazardNodeT>(trait_obj);
         ptr::drop_in_place(obj);
         Global.dealloc(
             NonNull::new_unchecked(trait_obj.data).as_opaque(),

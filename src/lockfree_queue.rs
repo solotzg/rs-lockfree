@@ -1,5 +1,5 @@
 use hazard_epoch::HazardEpoch;
-use hazard_pointer::{BaseHazardNode, HazardNodeI};
+use hazard_pointer::{BaseHazardNode, HazardNodeT};
 use util;
 use std::ptr;
 
@@ -11,7 +11,7 @@ struct FIFONode<T> {
     next: FIFONodePtr<T>,
 }
 
-impl<T> HazardNodeI for FIFONode<T> {
+impl<T> HazardNodeT for FIFONode<T> {
     fn get_base_hazard_node(&self) -> *mut BaseHazardNode {
         &self.base as *const _ as *mut _
     }

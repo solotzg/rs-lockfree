@@ -3,7 +3,7 @@ use spin_lock::SpinLock;
 use hazard_pointer::{ThreadStore, VersionHandle};
 use std::ptr;
 use std::mem;
-use hazard_pointer::HazardNodeI;
+use hazard_pointer::HazardNodeT;
 use std::intrinsics;
 use util;
 use error;
@@ -127,7 +127,7 @@ impl HazardEpoch {
 
     pub unsafe fn add_node<T>(&mut self, node: *mut T) -> error::Status
     where
-        T: HazardNodeI,
+        T: HazardNodeT,
     {
         let mut ts = ptr::null_mut::<ThreadStore>();
         if node.is_null() {

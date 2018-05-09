@@ -11,7 +11,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::time;
 use rs_lockfree::hazard_pointer::BaseHazardNode;
-use rs_lockfree::hazard_pointer::HazardNodeI;
+use rs_lockfree::hazard_pointer::HazardNodeT;
 use rs_lockfree::hazard_epoch::HazardEpoch;
 use rs_lockfree::util;
 use rs_lockfree::error::Status;
@@ -29,7 +29,7 @@ impl PartialEq for TestObj {
     }
 }
 
-impl HazardNodeI for TestObj {
+impl HazardNodeT for TestObj {
     fn get_base_hazard_node(&self) -> *mut BaseHazardNode {
         &self.base as *const _ as *mut BaseHazardNode
     }

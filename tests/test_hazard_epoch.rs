@@ -195,7 +195,7 @@ fn test_multi_thread() {
     global_conf.read_loops = cnt;
     global_conf.write_loops = cnt;
     global_conf.v = Box::into_raw(Box::new(TestObj::new(&mut global_conf.cnt)));
-    global_conf.h = HazardEpoch::default();
+    global_conf.h = unsafe { HazardEpoch::default_new_in_stack() };
     let global_conf_ptr = ShardPtr::new(&mut global_conf as *mut _);
 
     println!(
@@ -248,7 +248,7 @@ fn test_multi_thread() {
 #[test]
 fn test_base() {
     unsafe {
-        let mut he = Box::new(HazardEpoch::default());
+        let mut he = Box::new(HazardEpoch::default_new_in_stack());
         let mut cnt = 0i64;
         let mut handle = 0u64;
         let ret = he.acquire(&mut handle);

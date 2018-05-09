@@ -64,13 +64,17 @@ impl<T> LockFreeQueue<T> {
         util::atomic_load_raw_ptr(&*self.tail)
     }
 
-    pub fn new() -> LockFreeQueue<T> {
+    pub unsafe fn default_new_in_stack() -> LockFreeQueue<T> {
         let head = Box::into_raw(Box::new(FIFONode::<T>::default()));
         LockFreeQueue {
-            hazard_epoch: HazardEpoch::default(),
+            hazard_epoch: HazardEpoch::default_new_in_stack(),
             head: util::WrappedAlign64Type(head),
             tail: util::WrappedAlign64Type(head),
         }
+    }
+
+    pub fn default_new_in_heap() -> Box<LockFreeQueue<T>> {
+        unsafe { Box::new(Self::default_new_in_stack()) }
     }
 
     pub fn push(&mut self, v: T) {
@@ -157,7 +161,7 @@ mod test {
     #[test]
     fn test_base() {
         use lockfree_queue::LockFreeQueue;
-        let mut queue = LockFreeQueue::new();
+        let mut queue = unsafe { LockFreeQueue::default_new_in_stack() };
         assert!(queue.pop().is_none());
         queue.push(1);
         assert_eq!(queue.pop().unwrap(), 1);
@@ -174,7 +178,7 @@ mod test {
     fn test_memory_leak() {
         use lockfree_queue::LockFreeQueue;
         let cnt = RefCell::new(0);
-        let mut queue = LockFreeQueue::new();
+        let mut queue = unsafe { LockFreeQueue::default_new_in_stack() };
         let test_num = 100;
         for i in 0..test_num {
             queue.push(Node { cnt: &cnt, v: i });

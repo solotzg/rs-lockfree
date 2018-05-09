@@ -159,7 +159,7 @@ fn test_multi_threads() {
     let mut global_conf = unsafe { mem::zeroed::<GlobalConf>() };
 
     global_conf.loop_cnt = cnt;
-    global_conf.stack = lockfree_stack::LockFreeStack::new();
+    global_conf.stack = unsafe { lockfree_stack::LockFreeStack::default_new_in_stack() };
     global_conf.producer_cnt = producer_count;
 
     let global_conf_ptr = ShardPtr::new(&mut global_conf as *mut _);

@@ -212,11 +212,6 @@ impl ThreadStore {
     }
 
     #[inline]
-    fn set_curr_seq(&mut self, seq: u32) {
-        self.curr_seq_version.seq = seq;
-    }
-
-    #[inline]
     fn inc_curr_seq(&mut self) {
         self.curr_seq_version.seq += 1;
     }

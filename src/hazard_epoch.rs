@@ -56,13 +56,18 @@ impl HazardEpoch {
         );
     }
 
-    pub fn new(thread_waiting_threshold: i64, min_version_cache_time_us: i64) -> HazardEpoch {
+    /// To improve performance, HazardEpoch can be allocated in stack directly, but it can't be
+    /// moved after calling any method.
+    pub unsafe fn new_in_stack(
+        thread_waiting_threshold: i64,
+        min_version_cache_time_us: i64,
+    ) -> HazardEpoch {
         let mut ret = HazardEpoch {
             thread_waiting_threshold,
             min_version_cache_time_us,
             version: WrappedAlign64Type(0),
             thread_lock: WrappedAlign64Type(SpinLock::default()),
-            threads: unsafe { mem::zeroed() },
+            threads: mem::zeroed(),
             thread_list: ptr::null_mut(),
             thread_count: 0,
             hazard_waiting_count: WrappedAlign64Type(0),
@@ -75,6 +80,23 @@ impl HazardEpoch {
             ret.threads[idx] = ThreadStore::default();
         }
         ret
+    }
+
+    pub fn new_in_heap(thread_waiting_threshold: i64, min_version_cache_time_us: i64) -> Box<Self> {
+        unsafe {
+            Box::new(Self::new_in_stack(
+                thread_waiting_threshold,
+                min_version_cache_time_us,
+            ))
+        }
+    }
+
+    pub unsafe fn default_new_in_stack() -> Self {
+        Self::new_in_stack(64, 200000)
+    }
+
+    pub fn default_new_in_heap() -> Box<Self> {
+        Self::new_in_heap(64, 200000)
     }
 
     #[inline]
@@ -235,12 +257,6 @@ impl HazardEpoch {
             self.set_curr_min_version_timestamp(util::get_cur_microseconds_time());
         }
         ret
-    }
-}
-
-impl Default for HazardEpoch {
-    fn default() -> Self {
-        HazardEpoch::new(64, 200000)
     }
 }
 

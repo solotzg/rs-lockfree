@@ -200,7 +200,7 @@ fn run() {
     global_conf.read_loops = cnt;
     global_conf.write_loops = cnt;
     global_conf.v = Box::into_raw(Box::new(TestObj::new(&mut global_conf.cnt)));
-    global_conf.h = HazardEpoch::default();
+    global_conf.h = unsafe { HazardEpoch::default_new_in_stack() };
     let global_conf_ptr = ShardPtr::new(&mut global_conf as *mut _);
 
     info!(

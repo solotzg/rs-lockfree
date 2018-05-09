@@ -85,7 +85,7 @@ impl Default for Atomic {
     }
 }
 
-struct SpinRWLock {
+pub struct SpinRWLock {
     atomic: Atomic,
     w_owner: i64,
 }
@@ -96,7 +96,7 @@ impl SpinRWLock {
         ptr::read_volatile(&self.atomic)
     }
 
-    unsafe fn try_rlock(&mut self) -> bool {
+    pub unsafe fn try_rlock(&mut self) -> bool {
         let mut ret = false;
         let old_v = self.atomic();
         let mut new_v = old_v;
@@ -109,7 +109,7 @@ impl SpinRWLock {
         ret
     }
 
-    unsafe fn rlock(&mut self) {
+    pub unsafe fn rlock(&mut self) {
         loop {
             let old_v = self.atomic();
             let mut new_v = old_v;
@@ -123,7 +123,7 @@ impl SpinRWLock {
         }
     }
 
-    unsafe fn unrlock(&mut self) {
+    pub unsafe fn unrlock(&mut self) {
         loop {
             let old_v = self.atomic();
             let mut new_v = old_v;
@@ -139,7 +139,7 @@ impl SpinRWLock {
         }
     }
 
-    unsafe fn try_lock(&mut self) -> bool {
+    pub unsafe fn try_lock(&mut self) -> bool {
         let mut ret = false;
         let old_v = self.atomic();
         let mut new_v = old_v;
@@ -153,7 +153,7 @@ impl SpinRWLock {
         ret
     }
 
-    unsafe fn lock(&mut self) {
+    pub unsafe fn lock(&mut self) {
         loop {
             let old_v = self.atomic();
             let mut new_v = old_v;
@@ -175,7 +175,7 @@ impl SpinRWLock {
         }
     }
 
-    unsafe fn unlock(&mut self) {
+    pub unsafe fn unlock(&mut self) {
         loop {
             let old_v = self.atomic();
             let mut new_v = old_v;
@@ -200,7 +200,7 @@ impl Default for SpinRWLock {
     }
 }
 
-struct RLockGuard {
+pub struct RLockGuard {
     lock: *mut SpinRWLock,
 }
 
@@ -225,7 +225,7 @@ impl Default for RLockGuard {
     }
 }
 
-struct WLockGuard {
+pub struct WLockGuard {
     lock: *mut SpinRWLock,
 }
 

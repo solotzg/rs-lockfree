@@ -15,35 +15,34 @@ impl Default for SpinLock {
 impl SpinLock {
     /// Keep trying to lock until success.
     pub unsafe fn lock(&mut self) {
-        while !(0 == intrinsics::atomic_load(&self.atomic)
-            && intrinsics::atomic_cxchg(&mut self.atomic, 0, 1).1)
-        {
+        while self.is_locked() || !intrinsics::atomic_cxchg(&mut self.atomic, 0, 1).1 {
             util::pause();
         }
     }
 
     /// Keep trying to lock until success, then return SpinLockGuard.
+    #[inline]
     pub unsafe fn lock_guard(&mut self) -> SpinLockGuard {
         self.lock();
         SpinLockGuard::new(self)
     }
 
     /// Unlock if is locked, else panic.
+    #[inline]
     pub unsafe fn unlock(&mut self) {
-        assert!(
-            1 == intrinsics::atomic_load(&self.atomic)
-                && intrinsics::atomic_cxchg(&mut self.atomic, 1, 0).1
-        );
+        assert!(self.is_locked() && intrinsics::atomic_cxchg(&mut self.atomic, 1, 0).1);
     }
 
+    /// Return true if locked.
+    #[inline]
     pub fn is_locked(&self) -> bool {
-        unsafe { 0 == intrinsics::atomic_load(&self.atomic) }
+        unsafe { 0 != intrinsics::atomic_load(&self.atomic) }
     }
 
     /// Return true if lock successfully.
+    #[inline]
     pub unsafe fn try_lock(&mut self) -> bool {
-        (0 == intrinsics::atomic_load(&self.atomic)
-            && intrinsics::atomic_cxchg(&mut self.atomic, 0, 1).1)
+        !self.is_locked() && intrinsics::atomic_cxchg(&mut self.atomic, 0, 1).1
     }
 }
 

@@ -58,6 +58,7 @@ impl HazardEpoch {
 
     /// To improve performance, HazardEpoch can be allocated in stack directly, but it can't be
     /// moved after calling any method.
+    #[inline]
     pub unsafe fn new_in_stack(
         thread_waiting_threshold: i64,
         min_version_cache_time_us: i64,
@@ -82,6 +83,7 @@ impl HazardEpoch {
         ret
     }
 
+    #[inline]
     pub fn new_in_heap(thread_waiting_threshold: i64, min_version_cache_time_us: i64) -> Box<Self> {
         unsafe {
             Box::new(Self::new_in_stack(
@@ -91,10 +93,12 @@ impl HazardEpoch {
         }
     }
 
+    #[inline]
     pub unsafe fn default_new_in_stack() -> Self {
         Self::new_in_stack(64, 200000)
     }
 
+    #[inline]
     pub fn default_new_in_heap() -> Box<Self> {
         Self::new_in_heap(64, 200000)
     }
@@ -125,26 +129,29 @@ impl HazardEpoch {
         }
     }
 
+    #[inline]
     pub unsafe fn add_node<T>(&mut self, node: *mut T) -> error::Status
     where
         T: HazardNodeT,
     {
         let mut ts = ptr::null_mut::<ThreadStore>();
+        let mut ret;
         if node.is_null() {
             warn!("invalid param, node null pointer");
-            return error::Status::InvalidParam;
-        }
-        let mut ret = self.get_thread_store(&mut ts);
-        if ret != error::Status::Success {
+            ret = error::Status::InvalidParam;
+        } else if error::Status::Success != {
+            ret = self.get_thread_store(&mut ts);
+            ret
+        } {
             warn!("get_thread_store_ fail, ret={}", ret);
-            return ret;
-        }
-        ret = (*ts).add_node(sync_add_and_fetch(&mut *self.version, 1), node);
-        if ret != error::Status::Success {
+        } else if error::Status::Success != {
+            ret = (*ts).add_node(sync_add_and_fetch(&mut *self.version, 1), node);
+            ret
+        } {
             warn!("add_node fail, ret={}", ret);
-            return ret;
+        } else {
+            sync_fetch_and_add(&mut *self.hazard_waiting_count, 1);
         }
-        sync_fetch_and_add(&mut *self.hazard_waiting_count, 1);
         ret
     }
 
@@ -155,24 +162,29 @@ impl HazardEpoch {
 
     pub fn acquire(&mut self, handle: &mut u64) -> error::Status {
         let mut ts = ptr::null_mut::<ThreadStore>();
-        let mut ret = unsafe { self.get_thread_store(&mut ts) };
-        if ret != error::Status::Success {
+        let mut ret;
+        if error::Status::Success != {
+            ret = unsafe { self.get_thread_store(&mut ts) };
+            ret
+        } {
             warn!("get_thread_store fail, ret={}", ret);
-            return ret;
-        }
-        let ts = unsafe { &mut (*ts) };
-        loop {
-            let version = self.atomic_load_version();
-            let mut version_handle = VersionHandle::new(0);
-            ret = ts.acquire(version, &mut version_handle);
-            if ret != error::Status::Success {
-                warn!("thread store acquire fail, ret={}", ret);
-                break;
-            } else if version != self.atomic_load_version() {
-                ts.release(&version_handle);
-            } else {
-                *handle = version_handle.ver_u64();
-                break;
+        } else {
+            let ts = unsafe { &mut *ts };
+            loop {
+                let version = self.atomic_load_version();
+                let mut version_handle = VersionHandle::new(0);
+                if error::Status::Success != {
+                    ret = ts.acquire(version, &mut version_handle);
+                    ret
+                } {
+                    warn!("thread store acquire fail, ret={}", ret);
+                    break;
+                } else if version != self.atomic_load_version() {
+                    ts.release(&version_handle);
+                } else {
+                    *handle = version_handle.ver_u64();
+                    break;
+                }
             }
         }
         ret
@@ -183,6 +195,7 @@ impl HazardEpoch {
         intrinsics::atomic_load(&self.thread_count)
     }
 
+    #[inline]
     pub unsafe fn release(&mut self, handle: u64) {
         let version_handle = VersionHandle::new(handle);
         if MAX_THREAD_COUNT > version_handle.tid() as usize {
@@ -207,6 +220,7 @@ impl HazardEpoch {
         intrinsics::atomic_load(&*self.hazard_waiting_count)
     }
 
+    #[inline]
     unsafe fn get_thread_store(&mut self, ts: &mut *mut ThreadStore) -> error::Status {
         let mut ret = error::Status::Success;
         let tn = util::get_thread_id() as u16;
@@ -215,17 +229,21 @@ impl HazardEpoch {
             ret = error::Status::TooManyThreads;
         } else {
             *ts = self.threads.as_mut_ptr().offset(tn as isize);
-            if !(**ts).is_enabled() {
+            let ts_obj = &mut **ts;
+            if !ts_obj.is_enabled() {
+                // CAS can be used directly here, no ABA problem.
+                // spin lock might trigger thread yield.
+
                 self.thread_lock.lock();
-                if !(**ts).is_enabled() {
-                    (**ts).set_enabled(tn);
-                    (**ts).set_next(self.atomic_load_thread_list());
-                    intrinsics::atomic_store(
-                        &mut self.thread_list as *mut _ as *mut usize,
-                        *ts as usize,
-                    );
-                    sync_fetch_and_add(&mut self.thread_count, 1);
-                }
+
+                ts_obj.set_enabled(tn);
+                ts_obj.set_next(self.atomic_load_thread_list());
+                intrinsics::atomic_store(
+                    &mut self.thread_list as *mut _ as *mut usize,
+                    *ts as usize,
+                );
+                sync_fetch_and_add(&mut self.thread_count, 1);
+
                 self.thread_lock.unlock();
             }
         }
@@ -238,8 +256,11 @@ impl HazardEpoch {
     }
 
     unsafe fn get_min_version(&mut self, force_flush: bool) -> u64 {
-        let mut ret = self.curr_min_version();
-        if !force_flush && ret != 0
+        let mut ret = 0;
+        if !force_flush && 0 != {
+            ret = self.curr_min_version();
+            ret
+        }
             && self.curr_min_version_timestamp() + self.min_version_cache_time_us
                 > util::get_cur_microseconds_time()
         {

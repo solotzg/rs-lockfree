@@ -89,17 +89,13 @@ impl GlobalConf {
     }
 }
 
-fn get_current_tid() -> i64 {
-    unsafe { util::get_thread_id() }
-}
-
 fn set_cpu_affinity() {
     let cpus = core_affinity::get_core_ids().unwrap();
-    core_affinity::set_for_current(cpus[get_current_tid() as usize % cpus.len()]);
+    core_affinity::set_for_current(cpus[util::get_thread_id() as usize % cpus.len()]);
     info!(
         "set_cpu_affinity {} {}",
-        get_current_tid(),
-        get_current_tid() as usize % cpus.len()
+        util::get_thread_id(),
+        util::get_thread_id() as usize % cpus.len()
     );
 }
 
@@ -271,6 +267,7 @@ fn run() {
     unsafe {
         global_conf.h.retire();
     }
+
     info!(
         "waiting_count {} written {} read {}",
         unsafe { global_conf.h.get_hazard_waiting_count() },

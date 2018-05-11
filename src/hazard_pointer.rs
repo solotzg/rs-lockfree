@@ -146,7 +146,7 @@ impl BaseHazardNode {
     }
 
     #[inline]
-    fn trait_obj(&mut self) -> raw::TraitObject {
+    fn trait_obj(&self) -> raw::TraitObject {
         self.trait_obj
     }
 }
@@ -226,6 +226,7 @@ impl ThreadStore {
         self.curr_seq_version.version = version;
     }
 
+    #[inline]
     pub fn acquire(&mut self, version: u64, handle: &mut VersionHandle) -> error::Status {
         assert_eq!(self.tid(), util::get_thread_id() as u16);
         let mut ret = error::Status::Success;
@@ -246,7 +247,7 @@ impl ThreadStore {
 
     pub fn release(&mut self, handle: &VersionHandle) {
         assert_eq!(self.tid(), util::get_thread_id() as u16);
-        if self.tid() == handle.tid() && self.curr_seq() != handle.seq() {
+        if self.tid() != handle.tid() && self.curr_seq() != handle.seq() {
             warn!("invalid handle seq={}, tid={}", handle.seq(), handle.tid());
         } else {
             self.set_curr_version(std::u64::MAX);
@@ -275,7 +276,7 @@ impl ThreadStore {
 
     #[inline]
     pub fn get_hazard_waiting_count(&self) -> i64 {
-        unsafe { intrinsics::atomic_load(&*self.hazard_waiting_count as *const _) }
+        unsafe { intrinsics::atomic_load(&*self.hazard_waiting_count) }
     }
 
     #[inline]

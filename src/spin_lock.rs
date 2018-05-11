@@ -2,7 +2,7 @@ use util;
 use std::intrinsics;
 use std::ptr;
 
-/// User mode SpinLock
+/// User mode SpinLock, doesn't support compile barrier synchronize
 pub struct SpinLock {
     atomic: i8,
 }

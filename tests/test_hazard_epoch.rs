@@ -78,7 +78,7 @@ impl GlobalConf {
 }
 
 fn get_current_tid() -> i64 {
-    unsafe { util::get_thread_id() }
+    util::get_thread_id()
 }
 
 fn set_cpu_affinity() {

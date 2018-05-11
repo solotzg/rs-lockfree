@@ -7,7 +7,8 @@ pub mod hazard_pointer;
 pub mod util;
 pub mod error;
 pub mod hazard_epoch;
-mod spin_lock;
+pub mod spin_lock;
+pub mod spin_rwlock;
 pub mod lockfree_queue;
 pub mod lockfree_stack;
 

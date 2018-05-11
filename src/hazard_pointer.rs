@@ -227,7 +227,7 @@ impl ThreadStore {
     }
 
     pub fn acquire(&mut self, version: u64, handle: &mut VersionHandle) -> error::Status {
-        assert_eq!(self.tid(), unsafe { util::get_thread_id() } as u16);
+        assert_eq!(self.tid(), util::get_thread_id() as u16);
         let mut ret = error::Status::Success;
         if std::u64::MAX != self.curr_version() {
             warn!(
@@ -245,7 +245,7 @@ impl ThreadStore {
     }
 
     pub fn release(&mut self, handle: &VersionHandle) {
-        assert_eq!(self.tid(), unsafe { util::get_thread_id() } as u16);
+        assert_eq!(self.tid(), util::get_thread_id() as u16);
         if self.tid() == handle.tid() && self.curr_seq() != handle.seq() {
             warn!("invalid handle seq={}, tid={}", handle.seq(), handle.tid());
         } else {

@@ -12,110 +12,131 @@ union AtomicLockData {
 }
 
 #[derive(Copy, Clone)]
-struct Atomic {
+struct AtomicInfo {
     data: AtomicLockData,
 }
 
-impl Atomic {
+impl AtomicInfo {
     #[inline]
-    unsafe fn v(&self) -> u64 {
-        self.data.v
+    pub fn v(&self) -> u64 {
+        unsafe { self.data.v }
     }
 
     #[inline]
-    unsafe fn v_mut(&mut self) -> &mut u64 {
-        &mut self.data.v
+    pub fn v_mut(&mut self) -> &mut u64 {
+        unsafe { &mut self.data.v }
     }
 
     #[inline]
-    unsafe fn r_ref_cnt(&self) -> u64 {
+    pub fn v_ref(&self) -> &u64 {
+        unsafe { &self.data.v }
+    }
+
+    #[inline]
+    pub fn r_ref_cnt(&self) -> u64 {
         // 62b
-        self.data.rw_info & 0x3fffffffffffffff
+        unsafe { self.data.rw_info & 0x3fffffffffffffff }
     }
 
     #[inline]
-    unsafe fn w_pending(&self) -> u64 {
+    pub fn w_pending(&self) -> u64 {
         // 1b
-        (self.data.rw_info & 0x4000000000000000) >> 62
+        unsafe { (self.data.rw_info & 0x4000000000000000) >> 62 }
     }
 
     #[inline]
-    unsafe fn w_lock_flag(&self) -> u64 {
+    pub fn w_lock_flag(&self) -> u64 {
         // 1b
-        (self.data.rw_info & 0x8000000000000000) >> 63
+        unsafe { (self.data.rw_info & 0x8000000000000000) >> 63 }
     }
 
     #[inline]
-    unsafe fn set_r_ref_cnt(&mut self, r_ref_cnt: u64) {
-        self.data.rw_info |= r_ref_cnt & 0x3fffffffffffffff;
+    pub fn set_r_ref_cnt(&mut self, r_ref_cnt: u64) {
+        unsafe {
+            self.data.rw_info =
+                (self.data.rw_info & 0xc000000000000000) | (r_ref_cnt & 0x3fffffffffffffff);
+        }
     }
 
     #[inline]
-    unsafe fn add_r_ref_cnt(&mut self, cnt: u64) {
+    pub fn add_r_ref_cnt(&mut self, cnt: u64) {
         let cnt = self.r_ref_cnt() + cnt;
         self.set_r_ref_cnt(cnt);
     }
 
     #[inline]
-    unsafe fn sub_r_ref_cnt(&mut self, cnt: u64) {
+    pub fn sub_r_ref_cnt(&mut self, cnt: u64) {
         let cnt = self.r_ref_cnt() - cnt;
         self.set_r_ref_cnt(cnt);
     }
 
     #[inline]
-    unsafe fn set_w_pending(&mut self, w_pending: u64) {
-        self.data.rw_info |= (w_pending & 0x1) << 62;
+    pub fn set_w_pending(&mut self, w_pending: u64) {
+        unsafe {
+            self.data.rw_info =
+                (self.data.rw_info & 0xbfffffffffffffff) | ((w_pending & 0x1) << 62);
+        }
     }
 
     #[inline]
-    unsafe fn set_w_lock_flag(&mut self, w_lock_flag: u64) {
-        self.data.rw_info |= (w_lock_flag & 0x1) << 63;
+    pub fn set_w_lock_flag(&mut self, w_lock_flag: u64) {
+        unsafe {
+            self.data.rw_info =
+                (self.data.rw_info & 0x7fffffffffffffff) | ((w_lock_flag & 0x1) << 63);
+        }
     }
 
-    pub fn new_from_other(other: &Atomic) -> Atomic {
-        unsafe { ptr::read_volatile(other) }
-    }
-}
-
-impl Default for Atomic {
-    fn default() -> Self {
-        Atomic {
-            data: AtomicLockData { v: 0 },
+    pub fn new(v: u64) -> Self {
+        AtomicInfo {
+            data: AtomicLockData { v },
         }
     }
 }
 
+impl Default for AtomicInfo {
+    fn default() -> Self {
+        AtomicInfo::new(0)
+    }
+}
+
 pub struct SpinRWLock {
-    atomic: Atomic,
+    atomic_info: AtomicInfo,
     w_owner: i64,
 }
 
 impl SpinRWLock {
     #[inline]
-    unsafe fn atomic(&self) -> Atomic {
-        ptr::read_volatile(&self.atomic)
+    fn atomic_info(&self) -> AtomicInfo {
+        // TODO: whether atomic_load is needed or not?
+        self.atomic_info
     }
 
-    pub unsafe fn try_rlock(&mut self) -> bool {
+    #[inline]
+    fn atomic_cxchg_atomic_v(&mut self, old_v: u64, new_v: u64) -> bool {
+        unsafe { intrinsics::atomic_cxchg(self.atomic_info.v_mut(), old_v, new_v).1 }
+    }
+
+    #[inline]
+    pub fn try_rlock(&mut self) -> bool {
         let mut ret = false;
-        let old_v = self.atomic();
+        let old_v = self.atomic_info();
         let mut new_v = old_v;
         new_v.add_r_ref_cnt(1);
         if 0 == old_v.w_pending() && 0 == old_v.w_lock_flag() && MAX_REF_CNT > old_v.r_ref_cnt()
-            && intrinsics::atomic_cxchg(self.atomic.v_mut(), old_v.v(), new_v.v()).1
+            && self.atomic_cxchg_atomic_v(old_v.v(), new_v.v())
         {
             ret = true;
         }
         ret
     }
 
-    pub unsafe fn rlock(&mut self) {
+    pub fn rlock(&mut self) {
         loop {
-            let old_v = self.atomic();
+            let old_v = self.atomic_info();
             let mut new_v = old_v;
             new_v.add_r_ref_cnt(1);
             if 0 == old_v.w_pending() && 0 == old_v.w_lock_flag() && MAX_REF_CNT > old_v.r_ref_cnt()
-                && intrinsics::atomic_cxchg(self.atomic.v_mut(), old_v.v(), new_v.v()).1
+                && self.atomic_cxchg_atomic_v(old_v.v(), new_v.v())
             {
                 break;
             }
@@ -125,13 +146,13 @@ impl SpinRWLock {
 
     pub unsafe fn unrlock(&mut self) {
         loop {
-            let old_v = self.atomic();
+            let old_v = self.atomic_info();
             let mut new_v = old_v;
             new_v.sub_r_ref_cnt(1);
             if 0 != old_v.w_lock_flag() || 0 == old_v.r_ref_cnt() || MAX_REF_CNT < old_v.r_ref_cnt()
             {
                 panic!("this should never happen");
-            } else if intrinsics::atomic_cxchg(self.atomic.v_mut(), old_v.v(), new_v.v()).1 {
+            } else if self.atomic_cxchg_atomic_v(old_v.v(), new_v.v()) {
                 break;
             } else {
                 util::pause();
@@ -139,23 +160,24 @@ impl SpinRWLock {
         }
     }
 
-    pub unsafe fn try_lock(&mut self) -> bool {
+    #[inline]
+    pub fn try_lock(&mut self) -> bool {
         let mut ret = false;
-        let old_v = self.atomic();
+        let old_v = self.atomic_info();
         let mut new_v = old_v;
         new_v.set_w_pending(0);
         new_v.set_w_lock_flag(1);
-        if 0 == old_v.w_pending() && 0 == old_v.w_lock_flag() && MAX_REF_CNT > old_v.r_ref_cnt()
-            && intrinsics::atomic_cxchg(self.atomic.v_mut(), old_v.v(), new_v.v()).1
+        if 0 == old_v.w_lock_flag() && 0 == old_v.r_ref_cnt()
+            && self.atomic_cxchg_atomic_v(old_v.v(), new_v.v())
         {
             ret = true;
         }
         ret
     }
 
-    pub unsafe fn lock(&mut self) {
+    pub fn lock(&mut self) {
         loop {
-            let old_v = self.atomic();
+            let old_v = self.atomic_info();
             let mut new_v = old_v;
             let mut pending = false;
             if 0 != old_v.w_lock_flag() || 0 != old_v.r_ref_cnt() {
@@ -165,9 +187,10 @@ impl SpinRWLock {
                 new_v.set_w_pending(0);
                 new_v.set_w_lock_flag(1);
             }
-            if intrinsics::atomic_cxchg(self.atomic.v_mut(), old_v.v(), new_v.v()).1 {
+            if self.atomic_cxchg_atomic_v(old_v.v(), new_v.v()) {
                 if !pending {
                     self.w_owner = util::get_thread_id();
+                    assert_eq!(new_v.w_pending(), 0);
                     break;
                 }
             }
@@ -177,24 +200,38 @@ impl SpinRWLock {
 
     pub unsafe fn unlock(&mut self) {
         loop {
-            let old_v = self.atomic();
+            let old_v = self.atomic_info();
             let mut new_v = old_v;
             new_v.set_w_lock_flag(0);
             if 0 == old_v.w_lock_flag() || 0 != old_v.r_ref_cnt() {
-                panic!("this should never happen");
-            } else if intrinsics::atomic_cxchg(self.atomic.v_mut(), old_v.v(), new_v.v()).1 {
+                panic!(
+                    "can't unlock w_lock_flag {} r_ref_cnt {}",
+                    old_v.w_lock_flag(),
+                    old_v.r_ref_cnt()
+                );
+            } else if self.atomic_cxchg_atomic_v(old_v.v(), new_v.v()) {
                 break;
             } else {
                 util::pause();
             }
         }
     }
+
+    pub unsafe fn rlock_guard(&mut self) -> RLockGuard {
+        self.rlock();
+        RLockGuard::new(self)
+    }
+
+    pub unsafe fn wlock_guard(&mut self) -> WLockGuard {
+        self.lock();
+        WLockGuard::new(self)
+    }
 }
 
 impl Default for SpinRWLock {
     fn default() -> Self {
         SpinRWLock {
-            atomic: Default::default(),
+            atomic_info: Default::default(),
             w_owner: 0,
         }
     }
@@ -207,13 +244,13 @@ pub struct RLockGuard {
 impl RLockGuard {
     unsafe fn destroy(&mut self) {
         if !self.lock.is_null() {
-            (*self.lock).unlock();
+            (*self.lock).unrlock();
             self.lock = ptr::null_mut();
         }
     }
 
-    pub fn set_lock(&mut self, lock: *mut SpinRWLock) {
-        self.lock = lock;
+    pub fn new(lock: *mut SpinRWLock) -> Self {
+        RLockGuard { lock }
     }
 }
 
@@ -237,8 +274,8 @@ impl WLockGuard {
         }
     }
 
-    pub fn set_lock(&mut self, lock: *mut SpinRWLock) {
-        self.lock = lock;
+    pub fn new(lock: *mut SpinRWLock) -> Self {
+        WLockGuard { lock }
     }
 }
 
@@ -247,5 +284,38 @@ impl Default for WLockGuard {
         WLockGuard {
             lock: ptr::null_mut(),
         }
+    }
+}
+
+mod test {
+    #[test]
+    fn test_rwlock() {
+        use spin_rwlock::SpinRWLock;
+        let mut lock = SpinRWLock::default();
+        assert_eq!(lock.atomic_info.r_ref_cnt(), 0);
+        assert!(lock.try_rlock());
+        assert_eq!(lock.atomic_info.r_ref_cnt(), 1);
+        lock.rlock();
+        assert_eq!(lock.atomic_info.r_ref_cnt(), 2);
+        assert!(!lock.try_lock());
+        assert!(!lock.try_lock());
+        assert_eq!(lock.atomic_info.r_ref_cnt(), 2);
+        unsafe {
+            lock.unrlock();
+        }
+        unsafe {
+            lock.unrlock();
+        }
+        assert_eq!(lock.atomic_info.r_ref_cnt(), 0);
+        lock.lock();
+        assert!(!lock.try_lock());
+        assert!(!lock.try_rlock());
+        assert_eq!(lock.atomic_info.w_pending(), 0);
+        assert_eq!(lock.atomic_info.w_lock_flag(), 1);
+        unsafe {
+            lock.unlock();
+        }
+        assert_eq!(lock.atomic_info.w_lock_flag(), 0);
+        assert_eq!(lock.atomic_info.r_ref_cnt(), 0);
     }
 }

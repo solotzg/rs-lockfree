@@ -47,11 +47,11 @@ mod atomic_x86 {
     pub static mut GLOBAL_THREAD_ID: Cell<i64> = Cell::new(-1);
 
     /// Return an unique ID for current thread.
-    pub unsafe fn get_thread_id() -> i64 {
+    pub fn get_thread_id() -> i64 {
         thread_local!(static THREAD_ID: Cell<i64> = Cell::new(-1););
         THREAD_ID.with(|tid| {
             if -1 == tid.get() {
-                tid.set(sync_fetch_and_add(GLOBAL_THREAD_ID.get_mut(), 1));
+                tid.set(unsafe { sync_fetch_and_add(GLOBAL_THREAD_ID.get_mut(), 1) });
             }
             tid.get()
         })

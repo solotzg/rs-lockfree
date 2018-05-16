@@ -1,3 +1,4 @@
+//! Utility of project
 extern crate time;
 
 use std::ops::{Deref, DerefMut};
@@ -30,13 +31,40 @@ impl<T> DerefMut for WrappedAlign64Type<T> {
     }
 }
 
-/// Return current unix timestamp(microsecond).
-pub fn get_cur_microseconds_time() -> i64 {
-    let timespec = time::get_time();
-    timespec.sec * 1_000_000 + timespec.nsec as i64 / 1_000
+impl<T> From<T> for WrappedAlign64Type<T> {
+    fn from(x: T) -> Self {
+        WrappedAlign64Type(x)
+    }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+impl<T> WrappedAlign64Type<T> {
+    #[inline]
+    pub fn as_ptr(&self) -> *const T {
+        &self.0
+    }
+
+    #[inline]
+    pub fn as_mut_ptr(&self) -> *mut T {
+        self.as_ptr() as *mut _
+    }
+
+    #[inline]
+    pub fn get(&self) -> &T {
+        &self.0
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self) -> &mut T {
+        &mut self.0
+    }
+}
+
+/// Return current unix timestamp(microsecond).
+pub fn get_cur_microseconds_time() -> i64 {
+    (time::precise_time_ns() / 1_000) as i64
+}
+
+#[cfg(any(target_arch = "x86_64"))]
 mod atomic_x86 {
     use std::ops::Add;
     use std::intrinsics;
@@ -48,7 +76,7 @@ mod atomic_x86 {
 
     /// Return an unique ID for current thread.
     pub fn get_thread_id() -> i64 {
-        thread_local!{static THREAD_ID: Cell<i64> = Cell::new(-1);};
+        thread_local! {static THREAD_ID: Cell<i64> = Cell::new(-1);};
         THREAD_ID.with(|tid| {
             if -1 == tid.get() {
                 tid.set(unsafe { sync_fetch_and_add(GLOBAL_THREAD_ID.get_mut(), 1) });

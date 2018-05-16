@@ -1,3 +1,5 @@
+//! Definition and implementations of `LockFreeStack`
+//!
 use hazard_epoch::HazardEpoch;
 use hazard_pointer::{BaseHazardNode, HazardNodeT};
 use util;
@@ -49,6 +51,25 @@ impl<T> LIFONode<T> {
     }
 }
 
+/// LockFree stack, implemented based on `HazardEpoch`
+///
+/// # Examples
+///
+/// ```
+/// use rs_lockfree::lockfree_stack::LockFreeStack;
+/// let mut stack = unsafe { LockFreeStack::default_new_in_stack() };
+/// assert!(stack.pop().is_none());
+/// stack.push(1);
+/// assert_eq!(stack.pop().unwrap(), 1);
+/// let test_num = 100;
+/// for i in 0..test_num {
+///     stack.push(i);
+/// }
+/// for i in 0..test_num {
+///     assert_eq!(stack.pop().unwrap(), test_num - i - 1);
+/// }
+/// ```
+///
 pub struct LockFreeStack<T> {
     hazard_epoch: HazardEpoch,
     top: util::WrappedAlign64Type<LIFONodePtr<T>>,
@@ -56,9 +77,10 @@ pub struct LockFreeStack<T> {
 
 impl<T> LockFreeStack<T> {
     unsafe fn atomic_load_top(&self) -> LIFONodePtr<T> {
-        util::atomic_load_raw_ptr(&*self.top)
+        util::atomic_load_raw_ptr(self.top.as_ptr())
     }
 
+    /// Return LockFreeStack in stack with default setting of HazardEpoch
     pub unsafe fn default_new_in_stack() -> LockFreeStack<T> {
         LockFreeStack {
             hazard_epoch: HazardEpoch::default_new_in_stack(),
@@ -66,10 +88,12 @@ impl<T> LockFreeStack<T> {
         }
     }
 
+    /// Return LockFreeStack in heap with default setting of HazardEpoch
     pub fn default_new_in_heap() -> Box<Self> {
         unsafe { Box::new(Self::default_new_in_stack()) }
     }
 
+    /// Push an element to the top of current stack
     pub fn push(&mut self, v: T) {
         unsafe { self.inner_push(v) }
     }
@@ -82,7 +106,7 @@ impl<T> LockFreeStack<T> {
         let mut old = cur;
         (*node).set_next(old);
         while !{
-            let (tmp, b) = util::atomic_cxchg_raw_ptr(&mut *self.top, old, node);
+            let (tmp, b) = util::atomic_cxchg_raw_ptr(self.top.as_mut_ptr(), old, node);
             cur = tmp;
             b
         } {
@@ -92,6 +116,7 @@ impl<T> LockFreeStack<T> {
         self.hazard_epoch.release(handle);
     }
 
+    /// Pop the element at the top of current queue
     pub fn pop(&mut self) -> Option<T> {
         unsafe { self.inner_pop() }
     }
@@ -103,7 +128,7 @@ impl<T> LockFreeStack<T> {
         let mut cur = self.atomic_load_top();
         let mut old = cur;
         while !cur.is_null() && !{
-            let (tmp, b) = util::atomic_cxchg_raw_ptr(&mut *self.top, old, (*cur).next());
+            let (tmp, b) = util::atomic_cxchg_raw_ptr(self.top.as_mut_ptr(), old, (*cur).next());
             cur = tmp;
             b
         } {

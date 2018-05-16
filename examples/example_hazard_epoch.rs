@@ -12,9 +12,7 @@ use std::intrinsics;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::time;
-use rs_lockfree::hazard_pointer::BaseHazardNode;
-use rs_lockfree::hazard_pointer::HazardNodeT;
-use rs_lockfree::hazard_epoch::HazardEpoch;
+use rs_lockfree::hazard_epoch::{BaseHazardNode, HazardEpoch, HazardNodeT};
 use rs_lockfree::util;
 use rs_lockfree::error::Status;
 use std::ptr;
@@ -60,7 +58,7 @@ impl TestObj {
     }
 }
 
-struct GlobalConf {
+struct GlobalControl {
     stop: u8,
     cnt: i64,
     read_loops: i64,
@@ -71,7 +69,7 @@ struct GlobalConf {
     read: i64,
 }
 
-impl GlobalConf {
+impl GlobalControl {
     unsafe fn set_stop(&mut self, stop: bool) {
         intrinsics::atomic_store(&mut self.stop, stop as u8);
     }
@@ -99,59 +97,61 @@ fn set_cpu_affinity() {
     );
 }
 
-unsafe fn reader_thread_func(mut global_conf: ShardPtr<GlobalConf>) {
+unsafe fn reader_thread_func(mut global_control: ShardPtr<GlobalControl>) {
     set_cpu_affinity();
-    let global_conf = global_conf.as_mut();
+    let global_control = global_control.as_mut();
     let mut tol = 0;
-    for _ in 0..global_conf.read_loops {
+    let read_loops = global_control.read_loops;
+    for _ in 0..read_loops {
         let mut handle = 0u64;
-        let ret = global_conf.h.acquire(&mut handle);
+        let ret = global_control.h.acquire(&mut handle);
         assert_eq!(ret, Status::Success);
-        let v = util::atomic_load_raw_ptr(&global_conf.v);
+        let v = util::atomic_load_raw_ptr(&global_control.v);
         assert!((*v).data.is_some());
-        global_conf.h.release(handle);
+        global_control.h.release(handle);
         tol += 1;
-        if tol % 512 == 0 {
-            global_conf.add_read_cnt(tol);
+        if tol % 1024 == 0 {
+            global_control.add_read_cnt(tol);
             tol = 0;
         }
     }
-    global_conf.add_read_cnt(tol);
+    global_control.add_read_cnt(tol);
 }
 
-unsafe fn producer_thread_func(mut global_conf: ShardPtr<GlobalConf>) {
+unsafe fn producer_thread_func(mut global_control: ShardPtr<GlobalControl>) {
     set_cpu_affinity();
-    let global_conf = global_conf.as_mut();
+    let global_control = global_control.as_mut();
     let mut tol = 0;
-    for _ in 0..global_conf.write_loops {
-        let v = Box::into_raw(Box::new(TestObj::new(&mut global_conf.cnt)));
-        let mut curr = util::atomic_load_raw_ptr(&global_conf.v);
+    let write_loops = global_control.write_loops;
+    for _ in 0..write_loops {
+        let v = Box::into_raw(Box::new(TestObj::new(&mut global_control.cnt)));
+        let mut curr = util::atomic_load_raw_ptr(&global_control.v);
         let mut old = curr;
         while !{
-            let (tmp, b) = util::atomic_cxchg_raw_ptr(&mut global_conf.v, old, v);
+            let (tmp, b) = util::atomic_cxchg_raw_ptr(&mut global_control.v, old, v);
             curr = tmp;
             b
         } {
             old = curr;
         }
         tol += 1;
-        if tol % 512 == 0 {
-            global_conf.add_written_cnt(tol);
+        if tol % 1024 == 0 {
+            global_control.add_written_cnt(tol);
             tol = 0;
         }
-        global_conf.h.add_node(old);
+        global_control.h.add_node(old);
     }
-    global_conf.add_written_cnt(tol);
+    global_control.add_written_cnt(tol);
 }
 
-unsafe fn debug_thread_func(global_conf: ShardPtr<GlobalConf>) {
-    let global_conf = global_conf.as_ref();
-    while !global_conf.stop() {
+unsafe fn debug_thread_func(global_control: ShardPtr<GlobalControl>) {
+    let global_control = global_control.as_ref();
+    while !global_control.stop() {
         info!(
             "waiting_count {} written {} read {}",
-            global_conf.h.get_hazard_waiting_count(),
-            global_conf.written,
-            global_conf.read,
+            global_control.h.atomic_load_hazard_waiting_count(),
+            global_control.written,
+            global_control.read,
         );
         thread::sleep(time::Duration::from_millis(1000));
     }
@@ -216,29 +216,29 @@ fn run() {
     let memory = 2048_i64 * 1024 * 1024; // 2G
     let cnt = memory / mem::size_of::<TestObj>() as i64 / write_count;
 
-    let mut global_conf = unsafe { mem::zeroed::<GlobalConf>() };
-    global_conf.read_loops = cnt;
-    global_conf.write_loops = cnt;
-    global_conf.v = Box::into_raw(Box::new(TestObj::new(&mut global_conf.cnt)));
-    global_conf.h = unsafe { HazardEpoch::default_new_in_stack() };
-    let global_conf_ptr = ShardPtr::new(&mut global_conf as *mut _);
+    let mut global_control = unsafe { mem::zeroed::<GlobalControl>() };
+    global_control.read_loops = cnt;
+    global_control.write_loops = cnt;
+    global_control.v = Box::into_raw(Box::new(TestObj::new(&mut global_control.cnt)));
+    global_control.h = unsafe { HazardEpoch::default_new_in_stack() };
+    let global_control_ptr = ShardPtr::new(&mut global_control as *mut _);
 
     info!(
         "read loops {}, write loops {}",
-        global_conf.read_loops, global_conf.write_loops
+        global_control.read_loops, global_control.write_loops
     );
 
     let mut rpd = vec![];
     let mut wpd = vec![];
-    let dpd = thread::spawn(move || unsafe { debug_thread_func(global_conf_ptr) });
+    let dpd = thread::spawn(move || unsafe { debug_thread_func(global_control_ptr) });
     for _ in 0..read_count {
         rpd.push(thread::spawn(move || unsafe {
-            reader_thread_func(global_conf_ptr)
+            reader_thread_func(global_control_ptr)
         }));
     }
     for _ in 0..write_count {
         wpd.push(thread::spawn(move || unsafe {
-            producer_thread_func(global_conf_ptr)
+            producer_thread_func(global_control_ptr)
         }));
     }
 
@@ -255,25 +255,25 @@ fn run() {
     info!("write threads joined");
 
     unsafe {
-        global_conf.set_stop(true);
+        global_control.set_stop(true);
     }
 
     dpd.join().unwrap();
 
     unsafe {
-        ptr::drop_in_place(global_conf.v);
+        ptr::drop_in_place(global_control.v);
     }
 
     unsafe {
-        global_conf.h.retire();
+        global_control.h.retire();
     }
 
     info!(
         "waiting_count {} written {} read {}",
-        unsafe { global_conf.h.get_hazard_waiting_count() },
-        global_conf.written,
-        global_conf.read,
+        global_control.h.atomic_load_hazard_waiting_count(),
+        global_control.written,
+        global_control.read,
     );
-    assert_eq!(0, global_conf.cnt);
-    assert_eq!(global_conf.read, global_conf.written);
+    assert_eq!(0, global_control.cnt);
+    assert_eq!(global_control.read, global_control.written);
 }

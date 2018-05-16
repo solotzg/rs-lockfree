@@ -1,8 +1,10 @@
+//! Definition and implementations of `SpinLock`
+//!
 use util;
 use std::intrinsics;
 use std::ptr;
 
-/// User mode SpinLock, doesn't support compile barrier synchronize
+/// User mode SpinLock
 pub struct SpinLock {
     atomic: i8,
 }

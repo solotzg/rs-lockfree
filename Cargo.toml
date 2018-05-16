@@ -1,12 +1,24 @@
 [package]
 name = "rs_lockfree"
 version = "0.1.0"
-authors = ["童智高 <solotzg@163.com>"]
+authors = ["Tong Zhigao <solotzg@gmail.com>"]
+description = "a lock-Free lib based on practical Hazard Pointers algorithm"
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/solotzg/rs-lockfree.git"
+keywords = ["Hazard Pointers", "lock free", "lockfree queue", "lockfree stack"]
 
 [dependencies]
 log = "0.4"
 time = "0.1"
+cfg-if = "0.1"
 
 [dev-dependencies]
-env_logger = "0.5.9"
-core_affinity = "0.5.9"
+env_logger = "0.5"
+core_affinity = "0.5"
+
+[features]
+default = ["max_thread_count_16"]
+max_thread_count_16 = []
+max_thread_count_256 = []
+max_thread_count_4096 = []  # need to set environment variable: RUST_MIN_STACK=20000000

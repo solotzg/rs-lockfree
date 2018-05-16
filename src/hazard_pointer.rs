@@ -88,10 +88,41 @@ impl VersionHandle {
     }
 }
 
+/// Trait `HazardNodeT` is used to achieve `virtual function`.
 pub trait HazardNodeT: Drop {
+    /// It's necessary to put `BaseHazardNode`, which can be accessed by method `get_base_hazard_node`,
+    /// in custom struct.
+    ///
+    /// # Examples
+    /// ```
+    /// use rs_lockfree::hazard_epoch::{BaseHazardNode, HazardNodeT, HazardEpoch};
+    /// use std::cell::RefCell;
+    ///
+    /// struct Node<'a, T> {
+    ///     base: BaseHazardNode,
+    ///     cnt: &'a RefCell<i32>,
+    ///     v: T,
+    /// }
+    ///
+    /// impl<'a, T> Drop for Node<'a, T> {
+    ///     fn drop(&mut self) {
+    ///         *self.cnt.borrow_mut() += 10;
+    ///     }
+    /// }
+    ///
+    /// impl<'a, T> HazardNodeT for Node<'a, T> {
+    ///     fn get_base_hazard_node(&self) -> *mut BaseHazardNode {
+    ///         &self.base as *const _ as *mut _
+    ///     }
+    /// }
+    /// ```
     fn get_base_hazard_node(&self) -> *mut BaseHazardNode;
 }
 
+/// Definition ans usage is shown in [`HazardNodeT`]
+///
+/// [`HazardNodeT`]: trait.HazardNodeT.html
+///
 pub struct BaseHazardNode {
     trait_obj: raw::TraitObject,
     next: *mut BaseHazardNode,
@@ -276,12 +307,12 @@ impl ThreadStore {
 
     #[inline]
     pub fn get_hazard_waiting_count(&self) -> i64 {
-        unsafe { intrinsics::atomic_load(&*self.hazard_waiting_count) }
+        unsafe { intrinsics::atomic_load(self.hazard_waiting_count.as_ptr()) }
     }
 
     #[inline]
     unsafe fn atomic_load_hazard_waiting_list(&self) -> *mut BaseHazardNode {
-        util::atomic_load_raw_ptr(&*self.hazard_waiting_list)
+        util::atomic_load_raw_ptr(self.hazard_waiting_list.as_ptr())
     }
 
     pub unsafe fn retire(&mut self, version: u64, node_receiver: &mut ThreadStore) -> i64 {
@@ -328,7 +359,7 @@ impl ThreadStore {
         }
         node_receiver.inner_add_nodes(move_list_head, move_list_tail, move_count);
         sync_fetch_and_add(
-            &mut *self.hazard_waiting_count,
+            self.hazard_waiting_count.as_mut_ptr(),
             -(move_count + retire_count),
         );
         while !list_retire.is_null() {
@@ -359,7 +390,7 @@ impl ThreadStore {
         old: *mut BaseHazardNode,
         src: *mut BaseHazardNode,
     ) -> (*mut BaseHazardNode, bool) {
-        util::atomic_cxchg_raw_ptr(&mut *self.hazard_waiting_list, old, src)
+        util::atomic_cxchg_raw_ptr(self.hazard_waiting_list.as_mut_ptr(), old, src)
     }
 
     unsafe fn inner_add_nodes(
@@ -381,7 +412,7 @@ impl ThreadStore {
                 old = curr;
                 (*tail).set_next(old);
             }
-            sync_fetch_and_add(&mut *self.hazard_waiting_count, count);
+            sync_fetch_and_add(self.hazard_waiting_count.as_mut_ptr(), count);
         }
     }
 

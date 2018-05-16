@@ -10,9 +10,7 @@ use std::intrinsics;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::time;
-use rs_lockfree::hazard_pointer::BaseHazardNode;
-use rs_lockfree::hazard_pointer::HazardNodeT;
-use rs_lockfree::hazard_epoch::HazardEpoch;
+use rs_lockfree::hazard_epoch::{BaseHazardNode, HazardEpoch, HazardNodeT};
 use rs_lockfree::util;
 use rs_lockfree::error::Status;
 use std::ptr;
@@ -127,7 +125,7 @@ unsafe fn debug_thread_func(global_conf: ShardPtr<GlobalConf>) {
     while !global_conf.as_ref().stop() {
         println!(
             "hazard_waiting_count={}",
-            global_conf.as_ref().h.get_hazard_waiting_count()
+            global_conf.as_ref().h.atomic_load_hazard_waiting_count()
         );
         thread::sleep(time::Duration::from_millis(1000));
     }

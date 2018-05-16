@@ -1,3 +1,5 @@
+//! Definition and implementations of `LockFreeQueue`
+//!
 use hazard_epoch::HazardEpoch;
 use hazard_pointer::{BaseHazardNode, HazardNodeT};
 use util;
@@ -49,6 +51,25 @@ impl<T> FIFONode<T> {
     }
 }
 
+/// LockFree queue, implemented based on `HazardEpoch`
+///
+/// # Examples
+///
+/// ```
+/// use rs_lockfree::lockfree_queue::LockFreeQueue;
+/// let mut queue = unsafe { LockFreeQueue::default_new_in_stack() };
+/// assert!(queue.pop().is_none());
+/// queue.push(1);
+/// assert_eq!(queue.pop().unwrap(), 1);
+/// let test_num = 100;
+/// for i in 0..test_num {
+///     queue.push(i);
+/// }
+/// for i in 0..test_num {
+///     assert_eq!(queue.pop().unwrap(), i);
+/// }
+/// ```
+///
 pub struct LockFreeQueue<T> {
     hazard_epoch: HazardEpoch,
     head: util::WrappedAlign64Type<FIFONodePtr<T>>,
@@ -57,13 +78,14 @@ pub struct LockFreeQueue<T> {
 
 impl<T> LockFreeQueue<T> {
     unsafe fn atomic_load_head(&self) -> FIFONodePtr<T> {
-        util::atomic_load_raw_ptr(&*self.head)
+        util::atomic_load_raw_ptr(self.head.as_ptr())
     }
 
     unsafe fn atomic_load_tail(&self) -> FIFONodePtr<T> {
-        util::atomic_load_raw_ptr(&*self.tail)
+        util::atomic_load_raw_ptr(self.tail.as_ptr())
     }
 
+    /// Return LockFreeQueue in stack with default setting of HazardEpoch
     pub unsafe fn default_new_in_stack() -> LockFreeQueue<T> {
         let head = Box::into_raw(Box::new(FIFONode::<T>::default()));
         LockFreeQueue {
@@ -73,10 +95,12 @@ impl<T> LockFreeQueue<T> {
         }
     }
 
+    /// Return LockFreeQueue in heap with default setting of HazardEpoch
     pub fn default_new_in_heap() -> Box<LockFreeQueue<T>> {
         unsafe { Box::new(Self::default_new_in_stack()) }
     }
 
+    /// Push an element to the end of current queue
     pub fn push(&mut self, v: T) {
         unsafe { self.inner_push(v) }
     }
@@ -88,7 +112,7 @@ impl<T> LockFreeQueue<T> {
         let mut cur = self.atomic_load_tail();
         let mut old = cur;
         while !{
-            let (tmp, b) = util::atomic_cxchg_raw_ptr(&mut *self.tail, old, node);
+            let (tmp, b) = util::atomic_cxchg_raw_ptr(self.tail.as_mut_ptr(), old, node);
             cur = tmp;
             b
         } {
@@ -98,6 +122,7 @@ impl<T> LockFreeQueue<T> {
         self.hazard_epoch.release(handle);
     }
 
+    /// Pop the element at the head of current queue
     pub fn pop(&mut self) -> Option<T> {
         unsafe { self.inner_pop() }
     }
@@ -110,7 +135,7 @@ impl<T> LockFreeQueue<T> {
         let mut old = cur;
         let mut node = (*cur).next();
         while !node.is_null() && !{
-            let (tmp, b) = util::atomic_cxchg_raw_ptr(&mut *self.head, old, node);
+            let (tmp, b) = util::atomic_cxchg_raw_ptr(self.head.as_mut_ptr(), old, node);
             cur = tmp;
             b
         } {

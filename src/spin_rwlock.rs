@@ -1,3 +1,5 @@
+//! Definition and implementations of `SpinRWLock`
+//!
 use std::ptr;
 use std::intrinsics;
 use util;
@@ -99,6 +101,7 @@ impl Default for AtomicInfo {
     }
 }
 
+/// User mode SpinRWLock
 pub struct SpinRWLock {
     atomic_info: AtomicInfo,
     w_owner: i64,
@@ -237,6 +240,7 @@ impl Default for SpinRWLock {
     }
 }
 
+/// Guard of RLock, unlock it when dropped.
 pub struct RLockGuard {
     lock: *mut SpinRWLock,
 }
@@ -262,6 +266,7 @@ impl Default for RLockGuard {
     }
 }
 
+/// Guard of WLock, unlock it when dropped.
 pub struct WLockGuard {
     lock: *mut SpinRWLock,
 }

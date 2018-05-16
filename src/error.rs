@@ -1,10 +1,17 @@
+//! Definition of error and status.
+
 use std::fmt;
 
+/// Status of `HazardEpoch`
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum Status {
+    /// Success
     Success,
+    /// Current thread has already assigned a version handle
     Busy,
-    TooManyThreads,
+    /// Thread number overflow
+    ThreadNumOverflow,
+    /// Invalid parameter
     InvalidParam,
 }
 

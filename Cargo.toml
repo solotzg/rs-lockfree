@@ -6,7 +6,7 @@ description = "a lock-Free lib based on practical Hazard Pointers algorithm"
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/solotzg/rs-lockfree.git"
-keywords = ["Hazard Pointers", "lock free", "lockfree queue", "lockfree stack"]
+keywords = ["Hazard-Pointers", "lockfree", "lockfree-queue", "lockfree-stack"]
 
 [dependencies]
 log = "0.4"

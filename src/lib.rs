@@ -18,7 +18,6 @@
 #![feature(core_intrinsics)]
 #![feature(raw)]
 #![allow(dead_code)]
-#![feature(allocator_api)]
 
 mod hazard_pointer;
 pub mod util;

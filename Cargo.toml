@@ -1,6 +1,6 @@
 [package]
 name = "rs_lockfree"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Tong Zhigao <solotzg@gmail.com>"]
 description = "a lock-Free lib based on practical Hazard Pointers algorithm"
 readme = "README.md"

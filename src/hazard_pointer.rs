@@ -6,8 +6,6 @@ use std::intrinsics;
 use std::{mem, raw};
 use util::WrappedAlign64Type;
 use util::sync_fetch_and_add;
-use std::alloc::{Alloc, Global, Layout};
-use std::ptr::NonNull;
 
 struct SeqVersion {
     seq: u32,
@@ -373,11 +371,7 @@ impl ThreadStore {
     unsafe fn retire_hazard_node(node_retire: *mut BaseHazardNode) {
         let trait_obj = (*node_retire).trait_obj();
         let obj = mem::transmute::<raw::TraitObject, &mut HazardNodeT>(trait_obj);
-        ptr::drop_in_place(obj);
-        Global.dealloc(
-            NonNull::new_unchecked(trait_obj.data).as_opaque(),
-            Layout::for_value(obj),
-        );
+        Box::from_raw(obj as *mut HazardNodeT);
     }
 
     #[inline]

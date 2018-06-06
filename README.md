@@ -50,4 +50,6 @@ order to improve performance, it's better to allocate [`HazardEpoch`](src/hazard
         RUST_LOG=INFO cargo run --release --example example_lockfree_stack
         ```
 
-
+# Change Logs
+* version `0.1.1`
+  - Remove the use of `allocator_api`, because rust-nightly changes this feature too damn frequently.

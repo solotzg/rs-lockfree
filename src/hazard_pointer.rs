@@ -242,7 +242,7 @@ impl ThreadStore {
 
     #[inline]
     fn inc_curr_seq(&mut self) {
-        self.curr_seq_version.seq += 1;
+        self.curr_seq_version.seq.wrapping_add(1);
     }
 
     #[inline]

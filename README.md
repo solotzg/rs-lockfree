@@ -12,7 +12,10 @@ than context switch. Obviously, atomic operations, such as CAS, are essential in
 * Reference counting has 2 deficiencies: 
     - Each reading needs to modify the global reference count. Atomic operations on the same object in high concurrency 
 situation may become a performance bottleneck. 
-    - Managing ref-object will bring additional maintenance costs and increase implementation complexity.
+    - Managing ref-object will bring additional m
+    
+    
+    aintenance costs and increase implementation complexity.
 * [`Hazard Pointers`](http://www.cs.otago.ac.nz/cosc440/readings/hazard-pointers.pdf) algorithm firstly saves the 
 pointer of shared object to local thread, and then accessed it, and removes it after accessing is over. An object can 
 be released only when there is no thread contains its reference, which solve the [`ABA problem`](https://en.wikipedia.org/wiki/ABA_problem). 
